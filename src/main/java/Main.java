@@ -31,8 +31,12 @@ public class Main {
          if (httpRequest.length >= 2) {
              String path = httpRequest[1]; // /echo/abc
 
+             if (path.equals("/")) {
+                 outputStream.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes());
+             }
+
              String prefix = "/echo/";
-             if (path.contentEquals(prefix)) {
+             if (path.startsWith(prefix)) {
                  responseBody = path.substring(prefix.length());
                  contentLength = responseBody.length();
                  System.out.println("Content: " + responseBody);
