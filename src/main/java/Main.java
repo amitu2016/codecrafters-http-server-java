@@ -30,7 +30,7 @@ public class Main {
        int contentLength = 0;
          if (httpRequest.length >= 2) {
              String path = httpRequest[1]; // /echo/abc
-             
+             System.out.println("Path: "+path);
              String prefix = "/echo/";
              if (!path.equals("/") && path.startsWith(prefix)) {
                  responseBody = path.substring(prefix.length());
