@@ -37,26 +37,21 @@ public class Main {
                  contentLength = responseBody.length();
                  System.out.println("Content: " + responseBody);
                  System.out.println("Length: " + contentLength);
+
+                 String response = String.format(
+                         "HTTP/1.1 200 OK\r\n" +
+                                 "Content-Type: text/plain\r\n" +
+                                 "Content-Length: %d\r\n" +
+                                 "\r\n" +
+                                 "%s",
+                         contentLength, responseBody
+                 );
+                 outputStream.write(response.getBytes());
+                 outputStream.flush();
              } else {
                  outputStream.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes());
              }
          } else {
-             outputStream.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes());
-         }
-
-         String response = String.format(
-                 "HTTP/1.1 200 OK\r\n" +
-                         "Content-Type: text/plain\r\n" +
-                         "Content-Length: %d\r\n" +
-                         "\r\n" +
-                         "%s",
-                 contentLength, responseBody
-         );
-
-         if (httpRequest[1].contains("/echo/")) {
-             outputStream.write(response.getBytes());
-             outputStream.flush();
-         }else  {
              outputStream.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes());
          }
 
