@@ -53,8 +53,13 @@ public class Main {
                  contentLength, responseBody
          );
 
-         outputStream.write(response.getBytes());
-         outputStream.flush();
+         if (httpRequest[1].contains("/echo/")) {
+             outputStream.write(response.getBytes());
+             outputStream.flush();
+         }else  {
+             outputStream.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes());
+         }
+
      } catch (IOException e) {
        System.out.println("IOException: " + e.getMessage());
      }
