@@ -26,16 +26,35 @@ public class Main {
        String inputLine = bufferedReader.readLine();
        System.out.println("Input: "+inputLine);
        String[] httpRequest = inputLine.split(" ");
+       String responseBody = "";
+       int contentLength = 0;
+         if (httpRequest.length >= 2) {
+             String path = httpRequest[1]; // /echo/abc
 
-         for (String s : httpRequest) {
-             System.out.println(s);
+             String prefix = "/echo/";
+             if (path.startsWith(prefix)) {
+                 responseBody = path.substring(prefix.length());
+                 contentLength = responseBody.length();
+                 System.out.println("Content: " + responseBody);
+                 System.out.println("Length: " + contentLength);
+             } else {
+                 System.out.println("Invalid path: " + path);
+             }
+         } else {
+             System.out.println("Malformed request: " + inputLine);
          }
 
-       if (httpRequest[1].equals("/")) {
-           outputStream.write("HTTP/1.1 200 OK\r\n\r\n".getBytes());
-       }else  {
-           outputStream.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes());
-       }
+         String response = String.format(
+                 "HTTP/1.1 200 OK\r\n" +
+                         "Content-Type: text/plain\r\n" +
+                         "Content-Length: %d\r\n" +
+                         "\r\n" +
+                         "%s",
+                 contentLength, responseBody
+         );
+
+         outputStream.write(response.getBytes());
+         outputStream.flush();
      } catch (IOException e) {
        System.out.println("IOException: " + e.getMessage());
      }
