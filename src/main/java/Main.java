@@ -38,10 +38,10 @@ public class Main {
                  System.out.println("Content: " + responseBody);
                  System.out.println("Length: " + contentLength);
              } else {
-                 System.out.println("Invalid path: " + path);
+                 outputStream.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes());
              }
          } else {
-             System.out.println("Malformed request: " + inputLine);
+             outputStream.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes());
          }
 
          String response = String.format(
