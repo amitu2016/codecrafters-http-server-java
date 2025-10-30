@@ -26,14 +26,19 @@ public class Main {
        String inputLine = bufferedReader.readLine();
        System.out.println("Input: "+inputLine);
        String[] httpRequest = inputLine.split(" ");
+
        String responseBody = "";
        int contentLength = 0;
          if (httpRequest.length >= 2) {
              String path = httpRequest[1]; // /echo/abc
              System.out.println("Path: "+path);
              String prefix = "/echo/";
-             System.out.println("------->"+!path.equals("/") );
-             if (!path.equals("/") && path.startsWith(prefix)) {
+
+             if (httpRequest[1].equals("/")) {
+                 outputStream.write("HTTP/1.1 200 OK\r\n\r\n".getBytes());
+             }
+
+             if (path.startsWith(prefix)) {
                  responseBody = path.substring(prefix.length());
                  contentLength = responseBody.length();
                  System.out.println("Content: " + responseBody);
