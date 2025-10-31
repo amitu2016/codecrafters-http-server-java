@@ -39,7 +39,7 @@ public class Main {
              
              else if (httpRequest[1].equals("/user-agent")) {
             	 bufferedReader.readLine();
-            	 bufferedReader.readLine();
+            	 //bufferedReader.readLine();
                  String useragent = bufferedReader.readLine().split("\\s+")[1];
                  System.out.println("User-Agent: "+useragent);
                  String reply = String.format(
