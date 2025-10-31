@@ -1,78 +1,165 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+/**
+ * Entry point for the lightweight HTTP server.
+ *
+ * <p>This server listens on port 4221 and handles multiple client connections
+ * concurrently using a fixed thread pool. Each client connection is processed
+ * independently by a dedicated {@link ClientHandler} thread.</p>
+ */
 public class Main {
-  public static void main(String[] args) {
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
-    System.out.println("Logs from your program will appear here!");
 
-    // TODO: Uncomment the code below to pass the first stage
-    
-     try {
-       ServerSocket serverSocket = new ServerSocket(4221);
-       // Since the tester restarts your program quite often, setting SO_REUSEADDR
-       // ensures that we don't run into 'Address already in use' errors
-       serverSocket.setReuseAddress(true);
-    
-       Socket clientSocket = serverSocket.accept(); // Wait for connection from client.
-       System.out.println("accepted new connection");
+    public static void main(String[] args) {
+        System.out.println("Server starting...");
 
-       InputStream inputStream = clientSocket.getInputStream();
-       OutputStream outputStream = clientSocket.getOutputStream();
-       BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+        // Create a fixed thread pool to handle concurrent client connections.
+        // This approach prevents the server from creating unbounded threads,
+        // which could exhaust system resources under high load.
+        ExecutorService executor = Executors.newFixedThreadPool(10);
 
-       String inputLine = bufferedReader.readLine();
-       System.out.println("Input: "+inputLine);
-       String[] httpRequest = inputLine.split(" ");
+        try (ServerSocket serverSocket = new ServerSocket(4221)) {
+            serverSocket.setReuseAddress(true);
+            System.out.println("Server is listening on port 4221...");
 
-       String responseBody = "";
-       int contentLength = 0;
-         if (httpRequest.length >= 2) {
-             String path = httpRequest[1]; // /echo/abc
-             System.out.println("Path: "+path);
-             String prefix = "/echo/";
+            // The main server loop runs indefinitely, accepting new connections.
+            while (true) {
+                // Blocks until a new client connects.
+                Socket clientSocket = serverSocket.accept();
+                System.out.println("Accepted new connection from: " + clientSocket.getInetAddress());
 
-             if (httpRequest[1].equals("/")) {
-                 outputStream.write("HTTP/1.1 200 OK\r\n\r\n".getBytes());
-             }
-             
-             else if (httpRequest[1].equals("/user-agent")) {
-            	 bufferedReader.readLine();
-            	 //bufferedReader.readLine();
-                 String useragent = bufferedReader.readLine().split("\\s+")[1];
-                 System.out.println("User-Agent: "+useragent);
-                 String reply = String.format(
-                         "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %s\r\n\r\n%s",
-                         useragent.length(), useragent);
-                 outputStream.write(reply.getBytes());
+                // Submit client handling task to the thread pool for concurrent processing.
+                executor.submit(new ClientHandler(clientSocket));
             }
 
-             else if (path.startsWith(prefix)) {
-                 responseBody = path.substring(prefix.length());
-                 contentLength = responseBody.length();
-                 System.out.println("Content: " + responseBody);
-                 System.out.println("Length: " + contentLength);
+        } catch (IOException e) {
+            System.err.println("Server exception: " + e.getMessage());
+        }
+    }
+}
 
-                 String response = String.format(
-                         "HTTP/1.1 200 OK\r\n" +
-                                 "Content-Type: text/plain\r\n" +
-                                 "Content-Length: %d\r\n" +
-                                 "\r\n" +
-                                 "%s",
-                         contentLength, responseBody
-                 );
-                 outputStream.write(response.getBytes());
-                 outputStream.flush();
-             } else {
-                 outputStream.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes());
-             }
-         } else {
-             outputStream.write("HTTP/1.1 404 Not Found\r\n\r\n".getBytes());
-         }
+/**
+ * Handles a single client connection.
+ *
+ * <p>This class reads the HTTP request from the client, parses it,
+ * and sends back an appropriate HTTP response. Supported endpoints include:</p>
+ * <ul>
+ *   <li><b>GET /</b> - Returns HTTP 200 OK</li>
+ *   <li><b>GET /echo/{text}</b> - Returns {text} in response body</li>
+ *   <li><b>GET /user-agent</b> - Returns the client's User-Agent header</li>
+ * </ul>
+ */
+class ClientHandler implements Runnable {
 
-     } catch (IOException e) {
-       System.out.println("IOException: " + e.getMessage());
-     }
-  }
+    private final Socket clientSocket;
+
+    public ClientHandler(Socket clientSocket) {
+        this.clientSocket = clientSocket;
+    }
+
+    @Override
+    public void run() {
+        try (
+                InputStream inputStream = clientSocket.getInputStream();
+                OutputStream outputStream = clientSocket.getOutputStream();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))
+        ) {
+            // Read the request line (e.g., "GET /echo/abc HTTP/1.1")
+            String requestLine = reader.readLine();
+            System.out.println("Request: " + requestLine);
+
+            if (requestLine == null || requestLine.isEmpty()) {
+                writeResponse(outputStream, "400 Bad Request", "", "");
+                return;
+            }
+
+            String[] httpRequest = requestLine.split(" ");
+            if (httpRequest.length < 2) {
+                writeResponse(outputStream, "400 Bad Request", "", "");
+                return;
+            }
+
+            String method = httpRequest[0];
+            String path = httpRequest[1];
+
+            // Only handle GET requests for simplicity
+            if (!"GET".equalsIgnoreCase(method)) {
+                writeResponse(outputStream, "405 Method Not Allowed", "", "");
+                return;
+            }
+
+            // Route: root "/"
+            if ("/".equals(path)) {
+                writeResponse(outputStream, "200 OK", "", "");
+            }
+
+            // Route: /echo/{message}
+            else if (path.startsWith("/echo/")) {
+                String message = path.substring("/echo/".length());
+                writeResponse(outputStream, "200 OK", "text/plain", message);
+            }
+
+            // Route: /user-agent
+            else if ("/user-agent".equals(path)) {
+                String userAgent = extractUserAgent(reader);
+                writeResponse(outputStream, "200 OK", "text/plain", userAgent);
+            }
+
+            // Route not found
+            else {
+                writeResponse(outputStream, "404 Not Found", "", "");
+            }
+
+        } catch (IOException e) {
+            System.err.println("Client handling error: " + e.getMessage());
+        } finally {
+            // Ensure socket closure even if exception occurs
+            try {
+                clientSocket.close();
+            } catch (IOException e) {
+                System.err.println("Error closing socket: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Extracts the User-Agent header from the HTTP request headers.
+     *
+     * @param reader BufferedReader reading from client input stream
+     * @return User-Agent value, or an empty string if not found
+     * @throws IOException if an I/O error occurs
+     */
+    private String extractUserAgent(BufferedReader reader) throws IOException {
+        String headerLine;
+        while ((headerLine = reader.readLine()) != null && !headerLine.isEmpty()) {
+            if (headerLine.startsWith("User-Agent:")) {
+                return headerLine.substring("User-Agent:".length()).trim();
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Writes a complete HTTP response to the client output stream.
+     *
+     * @param outputStream the output stream to write to
+     * @param status       HTTP status line (e.g., "200 OK", "404 Not Found")
+     * @param contentType  value for the Content-Type header (can be empty)
+     * @param body         response body (can be empty)
+     * @throws IOException if an I/O error occurs
+     */
+    private void writeResponse(OutputStream outputStream, String status, String contentType, String body) throws IOException {
+        StringBuilder response = new StringBuilder();
+        response.append("HTTP/1.1 ").append(status).append("\r\n");
+        if (!contentType.isEmpty()) {
+            response.append("Content-Type: ").append(contentType).append("\r\n");
+            response.append("Content-Length: ").append(body.length()).append("\r\n");
+        }
+        response.append("\r\n").append(body);
+        outputStream.write(response.toString().getBytes());
+        outputStream.flush();
+    }
 }
