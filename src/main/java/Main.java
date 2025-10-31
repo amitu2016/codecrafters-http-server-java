@@ -46,7 +46,6 @@ public class Main {
                          "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %s\r\n\r\n%s\r\n",
                          useragent.length(), useragent);
                  outputStream.write(reply.getBytes());
-                 
             }
 
              else if (path.startsWith(prefix)) {
