@@ -32,7 +32,7 @@ public class Main {
              String path = httpRequest[1]; // /echo/abc
              System.out.println("Path: "+path);
              String prefix = "/echo/";
-             
+
              if (httpRequest[1].equals("/")) {
                  outputStream.write("HTTP/1.1 200 OK\r\n\r\n".getBytes());
              }
@@ -41,8 +41,9 @@ public class Main {
             	 bufferedReader.readLine();
             	 bufferedReader.readLine();
                  String useragent = bufferedReader.readLine().split("\\s+")[1];
+                 System.out.println("User-Agent: "+useragent);
                  String reply = String.format(
-                         "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %s\r\n\r\n%s\r\n",
+                         "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %s\r\n\r\n%s",
                          useragent.length(), useragent);
                  outputStream.write(reply.getBytes());
             }
