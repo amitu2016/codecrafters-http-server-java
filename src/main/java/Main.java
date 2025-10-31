@@ -32,8 +32,7 @@ public class Main {
              String path = httpRequest[1]; // /echo/abc
              System.out.println("Path: "+path);
              String prefix = "/echo/";
-           
-
+             
              if (httpRequest[1].equals("/")) {
                  outputStream.write("HTTP/1.1 200 OK\r\n\r\n".getBytes());
              }
