@@ -33,12 +33,24 @@ public class Main {
              String path = httpRequest[1]; // /echo/abc
              System.out.println("Path: "+path);
              String prefix = "/echo/";
+           
 
              if (httpRequest[1].equals("/")) {
                  outputStream.write("HTTP/1.1 200 OK\r\n\r\n".getBytes());
              }
+             
+             else if (httpRequest[1].equals("/user-agent")) {
+            	 bufferedReader.readLine();
+            	 bufferedReader.readLine();
+                 String useragent = bufferedReader.readLine().split("\\s+")[1];
+                 String reply = String.format(
+                         "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %s\r\n\r\n%s\r\n",
+                         useragent.length(), useragent);
+                 outputStream.write(reply.getBytes());
+                 
+            }
 
-             if (path.startsWith(prefix)) {
+             else if (path.startsWith(prefix)) {
                  responseBody = path.substring(prefix.length());
                  contentLength = responseBody.length();
                  System.out.println("Content: " + responseBody);
