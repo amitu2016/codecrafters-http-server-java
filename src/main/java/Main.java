@@ -6,15 +6,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.zip.GZIPOutputStream;
 
 /**
- * Lightweight concurrent HTTP server extended to advertise gzip support.
+ * Lightweight concurrent HTTP server with gzip compression.
  *
- * - If client sends "Accept-Encoding: gzip" for the /echo/{msg} route,
- *   server will include "Content-Encoding: gzip" in the response headers.
- * - The body is NOT compressed in this stage (per task instructions).
- *
- * All other behavior retained from previous version.
+ * /echo/{msg} supports gzip compression if the client includes Accept-Encoding: gzip
+ *  All other routes behave as before (no compression)
+ *  Matches Codecrafters "HTTP Server in Java" compression stage requirements
  */
 public class Main {
 
@@ -32,7 +31,6 @@ public class Main {
         if (filesDirectory == null) {
             filesDirectory = new File(".").getAbsolutePath();
         }
-
         final String baseDir = filesDirectory;
 
         // ---- Thread pool ----
@@ -110,23 +108,20 @@ class ClientHandler implements Runnable {
                 }
             }
 
-            // Routing
+            // ---- Routing ----
             if ("/".equals(path)) {
+                // Root route — no compression
                 writeTextResponse(out, "200 OK", "OK");
                 return;
             }
 
             if (path.startsWith("/echo/")) {
-                // --- NEW: check Accept-Encoding and include Content-Encoding if gzip supported ---
-                // Per task: only advertise gzip; do not compress body yet.
+                // --- Compression only for this route ---
                 String msg = path.substring("/echo/".length());
                 boolean clientAcceptsGzip = clientAcceptsGzip(headers.get("accept-encoding"));
-
                 if (clientAcceptsGzip) {
-                    // use the variant that includes Content-Encoding: gzip header
                     writeTextResponseWithEncoding(out, "200 OK", msg, "gzip");
                 } else {
-                    // normal response without Content-Encoding header
                     writeTextResponse(out, "200 OK", msg);
                 }
                 return;
@@ -152,6 +147,7 @@ class ClientHandler implements Runnable {
                 }
             }
 
+            // Fallback for unrecognized routes
             writeTextResponse(out, "404 Not Found", "Not Found");
 
         } catch (IOException e) {
@@ -163,13 +159,6 @@ class ClientHandler implements Runnable {
 
     /**
      * Simple check whether the Accept-Encoding header advertises gzip support.
-     *
-     * Accept-Encoding can contain multiple tokens, e.g.:
-     *   Accept-Encoding: gzip, deflate
-     *   Accept-Encoding: gzip;q=1.0, identity; q=0.5
-     *
-     * We consider the client accepting gzip if any comma-separated token starts with "gzip"
-     * (case-insensitive) — this covers q-values and whitespace.
      */
     private boolean clientAcceptsGzip(String acceptEncodingHeader) {
         if (acceptEncodingHeader == null) return false;
@@ -184,41 +173,55 @@ class ClientHandler implements Runnable {
 
     /**
      * Writes a text response WITHOUT Content-Encoding header.
-     * Used by most routes.
      */
     private void writeTextResponse(OutputStream out, String status, String body) throws IOException {
-        byte[] bodyBytes = body.getBytes();
+        byte[] bodyBytes = body.getBytes("UTF-8");
         String headers = "HTTP/1.1 " + status + "\r\n" +
                 "Content-Type: text/plain\r\n" +
                 "Content-Length: " + bodyBytes.length + "\r\n" +
                 "Connection: close\r\n" +
                 "\r\n";
-        out.write(headers.getBytes());
+        out.write(headers.getBytes("ISO-8859-1"));
         out.write(bodyBytes);
         out.flush();
     }
 
     /**
-     * Writes a text response and includes a Content-Encoding header if encoding != null.
-     *
-     * Note: per this stage we DO NOT compress the body; we only advertise the encoding header.
+     * Writes a text response and compresses the body with gzip.
+     * Sets Content-Encoding: gzip and correct Content-Length.
      */
     private void writeTextResponseWithEncoding(OutputStream out, String status, String body, String encoding) throws IOException {
-        byte[] bodyBytes = body.getBytes();
-        StringBuilder sb = new StringBuilder();
-        sb.append("HTTP/1.1 ").append(status).append("\r\n");
-        sb.append("Content-Type: text/plain\r\n");
-        // Add Content-Encoding header if requested (e.g., "gzip")
-        if (encoding != null && !encoding.isEmpty()) {
-            sb.append("Content-Encoding: ").append(encoding).append("\r\n");
-        }
-        sb.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
-        sb.append("Connection: close\r\n");
-        sb.append("\r\n");
+        byte[] bodyUtf8 = body.getBytes("UTF-8");
 
-        out.write(sb.toString().getBytes());
-        out.write(bodyBytes); // body is not compressed in this stage
-        out.flush();
+        if ("gzip".equalsIgnoreCase(encoding)) {
+            // Compress the body into a byte[] using GZIPOutputStream
+            byte[] compressed = gzipCompress(bodyUtf8);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("HTTP/1.1 ").append(status).append("\r\n");
+            sb.append("Content-Encoding: gzip\r\n");
+            sb.append("Content-Type: text/plain\r\n");
+            sb.append("Content-Length: ").append(compressed.length).append("\r\n");
+            sb.append("Connection: close\r\n");
+            sb.append("\r\n");
+
+            out.write(sb.toString().getBytes("ISO-8859-1"));
+            out.write(compressed); // binary gzip payload
+            out.flush();
+        } else {
+            writeTextResponse(out, status, body);
+        }
+    }
+
+    /**
+     * Compresses the input bytes using GZIP.
+     */
+    private byte[] gzipCompress(byte[] input) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzipOut = new GZIPOutputStream(baos)) {
+            gzipOut.write(input);
+        }
+        return baos.toByteArray();
     }
 
     /**
